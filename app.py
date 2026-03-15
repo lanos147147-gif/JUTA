@@ -11,11 +11,13 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
 
+
 st.set_page_config(
     page_title="주타,주식하다 현타올때",
     page_icon="📈",
     layout="wide"
 )
+
 
 # =========================
 # 스타일
@@ -36,6 +38,7 @@ html, body, [class*="css"] {
 .block-container {
     padding-top: 1.1rem;
     padding-bottom: 2rem;
+    max-width: 1400px;
 }
 
 .main-card {
@@ -47,13 +50,14 @@ html, body, [class*="css"] {
     margin-bottom: 18px;
 }
 
-.sub-card {
+.info-card {
     background: rgba(255,255,255,0.88);
     border: 1px solid rgba(255,255,255,0.75);
     backdrop-filter: blur(12px);
     border-radius: 22px;
     padding: 18px;
     box-shadow: 0 12px 30px rgba(148, 163, 184, 0.18);
+    margin-bottom: 14px;
 }
 
 .badge {
@@ -129,6 +133,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
 # =========================
 # 유틸
 # =========================
@@ -140,12 +145,14 @@ def safe_num(v, nd=2, suffix=""):
     except Exception:
         return "N/A"
 
+
 def strip_html_tags(text):
     if text is None:
         return ""
     text = re.sub(r"<[^>]+>", "", str(text))
     text = html.unescape(text)
     return text.strip()
+
 
 # =========================
 # 미국 종목 검색
@@ -195,6 +202,7 @@ def search_us_symbols(query: str):
 
     return out
 
+
 # =========================
 # 가격 데이터
 # =========================
@@ -209,6 +217,7 @@ def fetch_yf_history(symbol: str, period="6mo", interval="1d"):
     except Exception:
         return pd.DataFrame()
 
+
 @st.cache_data(ttl=300)
 def fetch_info(symbol: str):
     try:
@@ -216,6 +225,7 @@ def fetch_info(symbol: str):
         return info if isinstance(info, dict) else {}
     except Exception:
         return {}
+
 
 # =========================
 # 뉴스
@@ -257,6 +267,7 @@ def fetch_yahoo_news(query: str):
 
     return items
 
+
 # =========================
 # 감정분석
 # =========================
@@ -271,6 +282,7 @@ NEGATIVE_KEYWORDS = [
     "weak", "drop", "fall", "bearish", "decline", "probe", "recall",
     "delay", "cuts", "warning", "negative", "selloff"
 ]
+
 
 def keyword_sentiment_score(text: str):
     t = str(text).lower()
@@ -290,12 +302,14 @@ def keyword_sentiment_score(text: str):
         return max(score / 3.0, -1.0)
     return 0.0
 
+
 def score_to_tag(score):
     if score >= 0.15:
         return "호재", "news-good"
     if score <= -0.15:
         return "악재", "news-bad"
     return "중립", "news-neutral"
+
 
 # =========================
 # 보조지표
@@ -330,6 +344,7 @@ def add_indicators(df: pd.DataFrame):
 
     return x
 
+
 def finalize_indicator_df(df: pd.DataFrame):
     if df is None or df.empty:
         return pd.DataFrame()
@@ -338,11 +353,12 @@ def finalize_indicator_df(df: pd.DataFrame):
 
     need_cols = [
         "RSI", "MACD", "MACD_SIGNAL", "SMA20", "SMA60",
-        "BB_UPPER", "BB_LOWER", "ENV_UPPER", "ENV_LOWER",
+        "EMA20", "BB_UPPER", "BB_LOWER", "ENV_UPPER", "ENV_LOWER",
         "VOL_RATIO", "ANGLE"
     ]
     x = x.dropna(subset=need_cols)
     return x
+
 
 def evaluate_signal(df: pd.DataFrame, news_score: float = 0.0):
     latest = df.iloc[-1]
@@ -438,21 +454,28 @@ def evaluate_signal(df: pd.DataFrame, news_score: float = 0.0):
     else:
         return "강력매도", "sell-strong", score, reasons
 
+
 # =========================
 # 사이드바
 # =========================
 st.sidebar.markdown("## 🎀 메뉴")
-auto_refresh = st.sidebar.toggle("자동 새로고침", value=True)
+auto_refresh = st.sidebar.toggle("자동 새로고침", value=False)
 refresh_sec = st.sidebar.slider("새로고침(초)", 10, 120, 30, 10)
 show_intraday = st.sidebar.toggle("실시간에 가까운 분봉 차트", value=True)
 intraday_interval = st.sidebar.selectbox("분봉 간격", ["1m", "5m", "15m"], index=0)
 daily_period = st.sidebar.selectbox("일봉 분석 기간", ["3mo", "6mo", "1y", "2y"], index=1)
 
-st.markdown("### 🇺🇸 미국주식")
+st.sidebar.markdown("---")
 us_keyword = st.sidebar.text_input("미국 종목 검색", value="Apple")
 
 if auto_refresh:
     st_autorefresh(interval=refresh_sec * 1000, key="refresh_key")
+
+
+# =========================
+# 종목 선택
+# =========================
+st.markdown("### 🇺🇸 미국주식")
 
 us_results = search_us_symbols(us_keyword)
 
@@ -468,7 +491,6 @@ else:
     yf_symbol = manual
     news_query = manual
 
-st.toast(f"{display_name} 불러오는 중", icon="✨")
 
 # =========================
 # 시세 로드
@@ -498,6 +520,7 @@ if daily_ind.empty:
 if chart_ind.empty:
     chart_ind = daily_ind.copy()
 
+
 # =========================
 # 뉴스 로드
 # =========================
@@ -524,6 +547,7 @@ for item in news_items:
 
 avg_news = float(np.mean(scores)) if scores else 0.0
 
+
 # =========================
 # 종합 평가
 # =========================
@@ -533,13 +557,13 @@ latest = daily_ind.iloc[-1]
 prev_close = daily_ind.iloc[-2]["Close"] if len(daily_ind) > 1 else latest["Close"]
 chg_pct = ((latest["Close"] / prev_close) - 1) * 100 if prev_close else 0.0
 
-# =========================
-# 상단 카드
-# =========================
+display_name_html = html.escape(display_name)
+chart_note_html = html.escape(chart_note)
+
 st.markdown(f"""
-<div class="sub-card">
-    <div style="font-size:28px;font-weight:800;">{display_name}</div>
-    <div class="small-note">{chart_note}</div>
+<div class="info-card">
+    <div style="font-size:28px;font-weight:800;">{display_name_html}</div>
+    <div class="small-note">{chart_note_html}</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -554,6 +578,7 @@ m2.metric("등락률", safe_num(chg_pct, 2, "%"))
 m3.metric("RSI", safe_num(latest["RSI"]))
 m4.metric("MACD", safe_num(latest["MACD"], 3))
 m5.metric("거래량비", safe_num(latest["VOL_RATIO"], 2, "x"))
+
 
 # =========================
 # 차트
@@ -604,13 +629,13 @@ fig.update_layout(
 
 st.plotly_chart(fig, use_container_width=True)
 
+
 # =========================
 # 분석 / 뉴스
 # =========================
 left, right = st.columns([1.1, 0.9])
 
 with left:
-    st.markdown('<div class="sub-card">', unsafe_allow_html=True)
     st.markdown("### 🧠 분석 요약")
 
     bb_width = latest["BB_UPPER"] - latest["BB_LOWER"]
@@ -638,56 +663,50 @@ with left:
     else:
         st.error("하락·과열 신호가 겹친 상태입니다. 공격적 진입보다 리스크 관리가 우선입니다.")
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
 with right:
-    st.markdown('<div class="sub-card">', unsafe_allow_html=True)
     st.markdown("### 📰 최신 뉴스 / 호재·악재")
 
     if scored_news:
         for n in scored_news[:6]:
-            title_html = n["title"]
-            if n["link"]:
-                title_html = f'<a href="{n["link"]}" target="_blank" style="text-decoration:none;color:#111827;">{n["title"]}</a>'
+            if n["tag"] == "호재":
+                icon = "🟢"
+            elif n["tag"] == "악재":
+                icon = "🔴"
+            else:
+                icon = "⚪"
 
-            st.markdown(
-                f"""
-                <div style="padding:12px 10px;border-bottom:1px solid #e5e7eb;">
-                    <div style="margin-bottom:6px;">
-                        <span class="{n['tag_class']}">{n['tag']}</span>
-                    </div>
-                    <div style="font-weight:700; line-height:1.5;">{title_html}</div>
-                    <div class="small-note">{n['publisher']}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            if n["link"]:
+                st.markdown(f"{icon} **{n['tag']}** · [{n['title']}]({n['link']})")
+            else:
+                st.markdown(f"{icon} **{n['tag']}** · {n['title']}")
+
+            st.caption(n["publisher"])
     else:
         st.info("뉴스 데이터를 가져오지 못했습니다.")
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # 기업 정보
 # =========================
 info = fetch_info(yf_symbol)
 
-st.markdown('<div class="sub-card">', unsafe_allow_html=True)
 st.markdown("### 🏷️ 기업 기본 정보")
 i1, i2, i3, i4 = st.columns(4)
 i1.metric("시가총액", safe_num((info.get("marketCap") or 0) / 1e9, 2, "B"))
 i2.metric("PER", safe_num(info.get("trailingPE"), 2))
 i3.metric("EPS", safe_num(info.get("trailingEps"), 2))
 i4.metric("배당수익률", safe_num((info.get("dividendYield") or 0) * 100, 2, "%"))
-st.markdown('</div>', unsafe_allow_html=True)
 
+
+# =========================
+# 하단 안내
+# =========================
 st.markdown("""
-<div style="margin-top:18px; text-align:center; font-family:'Inter','Noto Sans KR',sans-serif; color:#64748b; font-size:14px;">
+<div style="margin-top:22px; text-align:center; font-family:'Inter','Noto Sans KR',sans-serif; color:#64748b; font-size:14px;">
     <a href="mailto:coke_bom@naver.com" style="color:#64748b; text-decoration:none; font-weight:600;">
-        coke_bom@naver.com 문의 및 불편사항
+        문의 및 불편사항: coke_bom@naver.com
     </a>
 </div>
 """, unsafe_allow_html=True)
-
 
 st.caption("참고: 이 평가는 규칙 기반 참고 신호이며 실제 투자 손익을 보장하지 않습니다.")
